@@ -247,11 +247,10 @@ def vis_one_image_opencv(
 
     return im
 
-
 def vis_one_image(
         im, im_name, output_dir, boxes, segms=None, keypoints=None, thresh=0.9,
         kp_thresh=2, dpi=200, box_alpha=0.0, dataset=None, show_class=False,
-        ext='pdf'):
+        ext='pdf', save_json=False):
     """Visual debugging of detections."""
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -286,6 +285,7 @@ def vis_one_image(
     sorted_inds = np.argsort(-areas)
 
     mask_color_id = 0
+    plotted_keypoints = []
     for i in sorted_inds:
         bbox = boxes[i, :4]
         score = boxes[i, -1]
@@ -336,6 +336,7 @@ def vis_one_image(
 
         # show keypoints
         if keypoints is not None and len(keypoints) > i:
+            plotted_keypoints.append(set())
             kps = keypoints[i]
             plt.autoscale(False)
             for l in range(len(kp_lines)):
@@ -350,11 +351,12 @@ def vis_one_image(
                     plt.plot(
                         kps[0, i1], kps[1, i1], '.', color=colors[l],
                         markersize=3.0, alpha=0.7)
-
+                    plotted_keypoints[-1].add(tuple(kps[:, i1].tolist()))
                 if kps[2, i2] > kp_thresh:
                     plt.plot(
                         kps[0, i2], kps[1, i2], '.', color=colors[l],
                         markersize=3.0, alpha=0.7)
+                    plotted_keypoints[-1].add(tuple(kps[:, i2].tolist()))
 
             # add mid shoulder / mid hip for better visualization
             mid_shoulder = (
@@ -387,3 +389,16 @@ def vis_one_image(
     output_name = os.path.basename(im_name) + '.' + ext
     fig.savefig(os.path.join(output_dir, '{}'.format(output_name)), dpi=dpi)
     plt.close('all')
+
+    if save_json:
+      import json
+      import itertools
+      obj = {'people': [
+        {'pose_keypoints_2d': [v for kp in kps for v in kp]}
+        for kps in plotted_keypoints
+      ]}
+      output_filename = os.path.basename(im_name) + '.json'
+      output_filepath = os.path.join(output_dir, output_filename)
+      with open(output_filepath, 'w') as outfile:
+        print('Writing keypoints to %s' % output_filepath)
+        json.dump(obj, outfile)
